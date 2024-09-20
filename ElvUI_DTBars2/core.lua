@@ -1,11 +1,9 @@
-﻿local E, L, V, P, G = unpack(ElvUI);
+local E, L, V, P, G = unpack(ElvUI);
 local AddOnName, Engine = ...
 
 local DT = E:GetModule('DataTexts')
 local DB = E:NewModule('DTBars2', 'AceTimer-3.0', 'AceHook-3.0', 'AceEvent-3.0')
 
---cache
---GLOBALS: CreateFrame, hooksecurefunc, LibStub, ElvDB
 local _G = _G
 local ACCEPT, CANCEL = ACCEPT, CANCEL
 local pairs, tinsert, type, error, format, collectgarbage = pairs, tinsert, type, error, format, collectgarbage
@@ -38,13 +36,11 @@ G['dtbarsSetup'] = {
 }
 
 --Rearranging pointLoc indexes cause 2 point DT panel looks weird with point being called 'middle'
-DT.PointLocation = {
-	[1] = 'left',
-	[2] = 'right',
-	[3] = 'middle',
-	[4] = 'farleft',
-	[5] = 'farright',
-}
+DT.PointLocation = {}
+
+for i = 1, 9 do
+	DT.PointLocation[i] = 'slot' .. i
+end
 
 DB.DefaultPanel = {
 	['enable'] = true,
@@ -71,7 +67,10 @@ E.PopupDialogs["DT_Panel_Add"] = {
 	text = L["Are you sure you want to create a panel with those parameters?\nThis action will require a reload."],
 	button1 = ACCEPT,
 	button2 = CANCEL,
-	OnAccept = function() local s = E.global.dtbarsSetup; DB:InsertPanel(s.name, s.slots, s.growth, s.width, s.transparent, s.anchor, s.point, s.x, s.y, s.strata, s.hide, s.border); ReloadUI() end,
+	OnAccept = function()
+		local s = E.global.dtbarsSetup; DB:InsertPanel(s.name, s.slots, s.growth, s.width, s.transparent, s.anchor,
+			s.point, s.x, s.y, s.strata, s.hide, s.border); ReloadUI()
+	end,
 	timeout = 0,
 	whileDead = 1,
 	hideOnEscape = false,
@@ -121,12 +120,10 @@ function DT:RegisterPanel(panel, numPoints, anchor, xOff, yOff)
 	panel.xOff = xOff
 	panel.yOff = yOff
 	panel.anchor = anchor
-	for i=1, numPoints do
-		local newI
-		if numPoints == 4 and i == 3 then newI = 5 end
-		local pointIndex = newI and DT.PointLocation[newI] or DT.PointLocation[i]
+	for i = 1, numPoints do
+		local pointIndex = 'slot' .. i
 		if not panel.dataPanels[pointIndex] then
-			panel.dataPanels[pointIndex] = CreateFrame('Button', 'DataText'..i, panel)
+			panel.dataPanels[pointIndex] = CreateFrame('Button', 'DataText' .. i, panel)
 			panel.dataPanels[pointIndex]:RegisterForClicks("AnyUp")
 			panel.dataPanels[pointIndex].text = panel.dataPanels[pointIndex]:CreateFontString(nil, 'OVERLAY')
 			panel.dataPanels[pointIndex].text:SetAllPoints()
@@ -135,7 +132,7 @@ function DT:RegisterPanel(panel, numPoints, anchor, xOff, yOff)
 			panel.dataPanels[pointIndex].text:SetJustifyV("MIDDLE")
 		end
 
-		panel.dataPanels[pointIndex]:Point(DT:GetDataPanelPoint(panel, newI or i, numPoints))
+		panel.dataPanels[pointIndex]:Point(DT:GetDataPanelPoint(panel, i, numPoints))
 	end
 
 	panel:SetScript('OnSizeChanged', DT.UpdateAllDimensions)
@@ -146,19 +143,17 @@ function DT:UpdateAllDimensions()
 	for panelName, panel in pairs(DT.RegisteredPanels) do
 		local vert = false
 		if E.global.dtbars and E.global.dtbars[panelName] then
-			if not E.db.dtbars[panelName] then DB:ProfileHandle(panelName, E.global.dtbars[panelName]) end --In case someone will run installs and stuff
+			if not E.db.dtbars[panelName] then DB:ProfileHandle(panelName, E.global.dtbars[panelName]) end
 			vert = E.db.dtbars[panelName].growth == "VERTICAL" and true or false
 		end
-		local width = (vert and panel:GetWidth() or ( panel:GetWidth()/ panel.numPoints)) - 4
-		local height = (vert and (panel:GetHeight()/panel.numPoints) or panel:GetHeight()) - 4
-		for i=1, panel.numPoints do
-			local newI
-			if panel.numPoints == 4 and i == 3 then newI = 5 end
-			local pointIndex = newI and DT.PointLocation[newI] or DT.PointLocation[i]
+		local width = vert and panel:GetWidth() - 4 or (panel:GetWidth() / panel.numPoints) - 4
+		local height = vert and (panel:GetHeight() / panel.numPoints) - 4 or panel:GetHeight() - 4
+		for i = 1, panel.numPoints do
+			local pointIndex = 'slot' .. i
 			panel.dataPanels[pointIndex]:Width(width)
 			panel.dataPanels[pointIndex]:Height(height)
 			panel.dataPanels[pointIndex]:ClearAllPoints()
-			panel.dataPanels[pointIndex]:Point(DT:GetDataPanelPoint(panel, newI or i, panel.numPoints))
+			panel.dataPanels[pointIndex]:Point(DT:GetDataPanelPoint(panel, i, panel.numPoints))
 		end
 	end
 end
@@ -167,59 +162,32 @@ function DT:GetDataPanelPoint(panel, i, numPoints)
 	local name = panel:GetName()
 	local vert = false
 	if E.global.dtbars and E.global.dtbars[name] then
-		vert = E.db.dtbars[name].growth == "VERTICAL" and true or false
+		vert = E.db.dtbars[name].growth == "VERTICAL"
 	end
-	if numPoints == 1 then
-		return 'CENTER', panel, 'CENTER'
-	elseif numPoints == 2 then
-		if i == 1 then
-			return (vert and "TOP" or 'LEFT'), panel, (vert and "TOP" or 'LEFT'), vert and 0 or 4, vert and -4 or 0
-		elseif i == 2 then
-			return (vert and "BOTTOM" or 'RIGHT'), panel, (vert and "BOTTOM" or 'RIGHT'), vert and 0 or -4, vert and 4 or 0
+
+	if numPoints >= 1 then
+		local point, relativeTo, relativePoint, x, y
+		if vert then
+			point = "TOP"
+			relativeTo = panel
+			relativePoint = "TOP"
+			x = 0
+			y = -((i - 1) * (panel:GetHeight() / numPoints))
+		else
+			point = "LEFT"
+			relativeTo = panel
+			relativePoint = "LEFT"
+			x = ((i - 1) * (panel:GetWidth() / numPoints))
+			y = 0
 		end
-	elseif numPoints == 3 then
-		if i == 3 then
-			return 'CENTER', panel, 'CENTER'
-		elseif i == 1 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel.dataPanels['middle'], (vert and 'TOP' or 'LEFT'), vert and 0 or -4, vert and 4 or 0
-		elseif i == 2 then
-			return (vert and 'TOP' or 'LEFT'), panel.dataPanels['middle'], (vert and 'BOTTOM' or 'RIGHT'), vert and 0 or 4, vert and -4 or 0
-		end
-	elseif numPoints == 4 then
-		if i == 1 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel, 'CENTER', 0, vert and 2 or 0
-		elseif i == 2 then
-			return (vert and 'TOP' or 'LEFT'), panel, 'CENTER', 0, vert and -2 or 0
-		elseif i == 4 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel.dataPanels['left'], (vert and 'TOP' or 'LEFT'), vert and 0 or -4, vert and 2 or 0
-		elseif i == 5 then
-			return (vert and 'TOP' or 'LEFT'), panel.dataPanels['right'], (vert and 'BOTTOM' or 'RIGHT'), vert and 0 or 4, vert and -2 or 0
-		end
-	elseif numPoints == 5 then
-		if i == 3 then
-			return 'CENTER', panel, 'CENTER'
-		elseif i == 1 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel.dataPanels['middle'], (vert and 'TOP' or 'LEFT'), vert and 0 or -4, vert and 4 or 0
-		elseif i == 2 then
-			return (vert and 'TOP' or 'LEFT'), panel.dataPanels['middle'], (vert and 'BOTTOM' or 'RIGHT'), vert and 0 or 4, vert and -4 or 0
-		elseif i == 4 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel.dataPanels['left'], (vert and 'TOP' or 'LEFT'), vert and 0 or -4, vert and 4 or 0
-		elseif i == 5 then
-			return (vert and 'TOP' or 'LEFT'), panel.dataPanels['right'], (vert and 'BOTTOM' or 'RIGHT'), vert and 0 or 4, vert and -4 or 0
-		end
+		return point, relativeTo, relativePoint, x, y
 	else
-		if i == 3 then
-			return 'CENTER', panel, 'CENTER'
-		elseif i == 1 then
-			return (vert and 'BOTTOM' or 'RIGHT'), panel.dataPanels['middle'], (vert and 'TOP' or 'LEFT'), vert and 0 or -4, vert and 4 or 0
-		elseif i == 2 then
-			return (vert and 'TOP' or 'LEFT'), panel.dataPanels['middle'], (vert and 'BOTTOM' or 'RIGHT'), vert and 0 or 4, vert and -4 or 0
-		end
 	end
 end
 
 local LDB = LibStub:GetLibrary("LibDataBroker-1.1");
 local LSM = LibStub("LibSharedMedia-3.0")
+
 function DT:LoadDataTexts()
 	LDB:UnregisterAllCallbacks(self)
 
@@ -236,9 +204,7 @@ function DT:LoadDataTexts()
 
 		--Restore Panels
 		for i = 1, panel.numPoints do
-			local newI
-			if panel.numPoints == 4 and i == 3 then newI = 5 end
-			pointIndex = newI and DT.PointLocation[newI] or DT.PointLocation[i]
+			local pointIndex = 'slot' .. i
 			panel.dataPanels[pointIndex]:UnregisterAllEvents()
 			panel.dataPanels[pointIndex]:SetScript("OnUpdate", nil)
 			panel.dataPanels[pointIndex]:SetScript("OnEnter", nil)
@@ -257,15 +223,10 @@ function DT:LoadDataTexts()
 				panel.dataPanels[pointIndex]:SetScript("OnClick", DT.HideBattlegroundTexts)
 				DT.UPDATE_BATTLEFIELD_SCORE(panel.dataPanels[pointIndex])
 			else
-				--Register Panel to Datatext
 				for name, data in pairs(DT.RegisteredDataTexts) do
 					for option, value in pairs(self.db.panels) do
 						if value and type(value) == "table" then
 							if option == panelName and self.db.panels[option][pointIndex] and self.db.panels[option][pointIndex] == name then
-								DT:AssignPanelToDataText(panel.dataPanels[pointIndex], data)
-							end
-						elseif value and type(value) == "string" and value == name then
-							if self.db.panels[option] == name and option == panelName then
 								DT:AssignPanelToDataText(panel.dataPanels[pointIndex], data)
 							end
 						end
@@ -284,77 +245,26 @@ function DT:LoadDataTexts()
 	end
 end
 
---function for dealing with settings in case the table for the panel doesn't exist in current profile
 function DB:ProfileHandle(name, data)
-	if E.db.dtbars and not E.db.dtbars[name] then E.db.dtbars[name] = tcopy(DB.DefaultPanel) end
-	if E.db.dtbars[name] and not E.db.dtbars[name].height then E.db.dtbars[name].height = 22 end
-	if data.slots == 1 then
-		if not P.datatexts.panels[name] then
-			P.datatexts.panels[name] = {
-				['left'] = "",
-			}
+	if not E.db.dtbars then E.db.dtbars = {} end
+	if not E.db.dtbars[name] then E.db.dtbars[name] = CopyTable(DB.DefaultPanel) end
+	if not E.db.dtbars[name].height then E.db.dtbars[name].height = 22 end
+
+	if not P.datatexts.panels[name] then P.datatexts.panels[name] = {} end
+	if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
+
+	for i = 1, data.slots do
+		local slotName = 'slot' .. i
+		if slotName then
+			if not P.datatexts.panels[name][slotName] then P.datatexts.panels[name][slotName] = "" end
+			if not E.db.datatexts.panels[name][slotName] then E.db.datatexts.panels[name][slotName] = "" end
 		end
-		if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
-		if not E.db.datatexts.panels[name]['left'] then E.db.datatexts.panels[name]['left'] = "" end
-	elseif data.slots == 2 then
-		if not P.datatexts.panels[name] then
-			P.datatexts.panels[name] = {
-				['left'] = "",
-				['right'] = "",
-			}
-		end
-		if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
-		if not E.db.datatexts.panels[name]['left'] then E.db.datatexts.panels[name]['left'] = "" end
-		if not E.db.datatexts.panels[name]['right'] then E.db.datatexts.panels[name]['right'] = "" end
-	elseif data.slots == 3 then
-		if not P.datatexts.panels[name] then
-			P.datatexts.panels[name] = {
-				['left'] = "",
-				['middle'] = "",
-				['right'] = "",
-			}
-		end
-		if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
-		if not E.db.datatexts.panels[name]['left'] then E.db.datatexts.panels[name]['left'] = "" end
-		if not E.db.datatexts.panels[name]['middle'] then E.db.datatexts.panels[name]['middle'] = "" end
-		if not E.db.datatexts.panels[name]['right'] then E.db.datatexts.panels[name]['right'] = "" end
-	elseif data.slots == 4 then
-		if not P.datatexts.panels[name] then
-			P.datatexts.panels[name] = {
-				['left'] = "",
-				['right'] = "",
-				['farleft'] = "",
-				['farright'] = "",
-			}
-		end
-		if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
-		if not E.db.datatexts.panels[name]['left'] then E.db.datatexts.panels[name]['left'] = "" end
-		if not E.db.datatexts.panels[name]['right'] then E.db.datatexts.panels[name]['right'] = "" end
-		if not E.db.datatexts.panels[name]['farleft'] then E.db.datatexts.panels[name]['farleft'] = "" end
-		if not E.db.datatexts.panels[name]['farright'] then E.db.datatexts.panels[name]['farright'] = "" end
-	elseif data.slots == 5 then
-		if not P.datatexts.panels[name] then
-			P.datatexts.panels[name] = {
-				['left'] = "",
-				['middle'] = "",
-				['right'] = "",
-				['farleft'] = "",
-				['farright'] = "",
-			}
-		end
-		if not E.db.datatexts.panels[name] then E.db.datatexts.panels[name] = {} end
-		if not E.db.datatexts.panels[name]['left'] then E.db.datatexts.panels[name]['left'] = "" end
-		if not E.db.datatexts.panels[name]['middle'] then E.db.datatexts.panels[name]['middle'] = "" end
-		if not E.db.datatexts.panels[name]['right'] then E.db.datatexts.panels[name]['right'] = "" end
-		if not E.db.datatexts.panels[name]['farleft'] then E.db.datatexts.panels[name]['farleft'] = "" end
-		if not E.db.datatexts.panels[name]['farright'] then E.db.datatexts.panels[name]['farright'] = "" end
 	end
 end
 
---Creating new panel
 function DB:InsertPanel(name, slots, growth, width, transparent, anchor, point, x, y, strata, hide, border)
 	if name == "" then return end
-	name = "DTB2_"..name
+	name = "DTB2_" .. name
 	if not E.global.dtbars[name] then
 		E.global.dtbars[name] = {
 			['anchor'] = anchor,
@@ -388,7 +298,7 @@ function DB:DeletePanel(name)
 		for profile, data in pairs(ElvDB.profiles) do
 			if data.dtbars and data.dtbars[name] then data.dtbars[name] = nil end
 			if data.datatexts and data.datatexts.panels[name] then data.datatexts.panels[name] = nil end
-			if data.movers and data.movers[name.."_Mover"] then data.movers[name.."_Mover"] = nil end
+			if data.movers and data.movers[name .. "_Mover"] then data.movers[name .. "_Mover"] = nil end
 		end
 	end
 	ReloadUI()
@@ -433,15 +343,23 @@ function DB:ExtraDataBarSetup()
 					_G[name]:SetTemplate("Default", true)
 				end
 			end
-
 		end
 	end
 end
 
 function DB:OnEvent(event, unit)
 	if unit and unit ~= "player" then return end
-	local inCombat = (event == "PLAYER_REGEN_DISABLED" and true) or (event == "PLAYER_REGEN_ENABLED" and false) or InCombatLockdown()
-	local inVehicle = (event == "UNIT_ENTERING_VEHICLE" and true) or (event == "UNIT_EXITING_VEHICLE" and false) or UnitInVehicle("player")
+
+	if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+		self:UpdateVisibility()
+	elseif event == "UNIT_ENTERING_VEHICLE" or event == "UNIT_EXITING_VEHICLE" then
+		self:UpdateVisibility()
+	end
+end
+
+function DB:UpdateVisibility()
+	local inCombat = InCombatLockdown()
+	local inVehicle = UnitInVehicle("player")
 	for name, _ in pairs(E.global.dtbars) do
 		if name then
 			local db = E.db.dtbars[name]
@@ -457,8 +375,8 @@ end
 function DB:MoverCreation()
 	if not E.db.dtbars then E.db.dtbars = {} end
 	for name, data in pairs(E.global.dtbars) do
-		if name and not _G[name.."_Mover"] then
-			E:CreateMover(_G[name], name.."_Mover", name, nil, nil, nil, "ALL,MISC,DTBars")
+		if name and not _G[name .. "_Mover"] then
+			E:CreateMover(_G[name], name .. "_Mover", name, nil, nil, nil, "ALL,MISC,DTBars")
 		end
 	end
 end
@@ -480,14 +398,28 @@ function DB:CreateFrames()
 	if not E.db.dtbars then E.db.dtbars = {} end
 	for name, data in pairs(E.global.dtbars) do
 		if name and not _G[name] then
-			DB:ProfileHandle(name, data)
+			self:ProfileHandle(name, data)
 			local db = E.db.dtbars[name]
 			local bar = CreateFrame("Frame", name, E.UIParent)
-			bar:SetFrameStrata(data.strata)
-			bar:Point(data.anchor, E.UIParent, data.point, data.x or 0, data.y or 0);
-			DT:RegisterPanel(bar, data.slots, 'ANCHOR_BOTTOM', 0, -4)
+			bar:SetFrameStrata(data.strata or "LOW")
+			bar:SetPoint(data.point or "CENTER", E.UIParent, data.anchor or "CENTER", data.x or 0, data.y or 0)
+			DT:RegisterPanel(bar, data.slots or 3, 'ANCHOR_BOTTOM', 0, -4)
 			bar.Name = name
 			bar:Hide()
+
+			if not data.hide then
+				if db.transparent then
+					bar:SetTemplate("Transparent")
+				else
+					bar:SetTemplate("Default", true)
+				end
+			end
+
+			if db.mouseover then
+				bar:SetAlpha(0)
+				bar:SetScript("OnEnter", Bar_OnEnter)
+				bar:SetScript("OnLeave", Bar_OnLeave)
+			end
 		end
 	end
 end
