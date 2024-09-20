@@ -1,4 +1,4 @@
-﻿local E, _, V, P, G = unpack(ElvUI);
+local E, _, V, P, G = unpack(ElvUI);
 local L = E.Libs.ACL:GetLocale('ElvUI', E.global.general.locale or 'enUS')
 local tcopy = table.copy
 local DT = E:GetModule('DataTexts')
@@ -78,7 +78,7 @@ function DB:GetOptions()
 				type = "range",
 				name = L['Slots'],
 				desc = L["Sets number of datatext slots for the panel"],
-				min = 1, max = 5, step = 1,
+				min = 1, max = 9, step = 1,
 				get = function(info, value) return E.global.dtbarsSetup.slots end,
 				set = function(info, value) E.global.dtbarsSetup.slots = value end,
 			},
@@ -243,7 +243,7 @@ function DB:GetOptions()
 					type = "range",
 					name = L['Slots'],
 					desc = L["Sets number of datatext slots for the panel"],
-					min = 1, max = 5, step = 1,
+					min = 1, max = 9, step = 1,
 					get = function(info, value) return E.global.dtbars[panelname].slots end,
 					set = function(info, value)
 						local oldValue = E.global.dtbars[panelname].slots
