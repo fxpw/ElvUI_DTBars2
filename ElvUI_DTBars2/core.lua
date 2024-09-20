@@ -229,9 +229,13 @@ function DT:LoadDataTexts()
 							if option == panelName and self.db.panels[option][pointIndex] and self.db.panels[option][pointIndex] == name then
 								DT:AssignPanelToDataText(panel.dataPanels[pointIndex], data)
 							end
+						elseif value and type(value) == "string" and value == name then
+							if option == panelName then
+								DT:AssignPanelToDataText(panel.dataPanels[pointIndex], data)
+							end
 						end
 					end
-				end
+				end				
 			end
 			if E.global.dtbars and E.global.dtbars[panelName] then
 				panel.dataPanels[pointIndex]:HookScript("OnEnter", Button_OnEnter)
